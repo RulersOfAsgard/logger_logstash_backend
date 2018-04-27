@@ -53,7 +53,7 @@ defmodule LoggerLogstashBackendTest do
       "line" => 42,
       "key1" => "field1"
     }
-    assert contains?(data["fields"], expected)
+    assert contains?(data, expected)
     {:ok, ts} = Timex.parse data["@timestamp"], "{ISO:Extended}"
     ts = Timex.to_unix ts
 
@@ -76,7 +76,7 @@ defmodule LoggerLogstashBackendTest do
       "some_metadata" => "go here",
       "line" => 65
     }
-    assert contains?(data["fields"], expected)
+    assert contains?(data, expected)
     {:ok, ts} = Timex.parse data["@timestamp"], "{ISO:Extended}"
     ts = Timex.to_unix ts
 
