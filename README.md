@@ -1,11 +1,10 @@
-[![Build Status](https://travis-ci.org/marcelog/logger_logstash_backend.svg)](https://travis-ci.org/marcelog/logger_logstash_backend)
 
-LoggerLogstashBackend
+Fork of LoggerLogstashBackend
 =====================
 
 ## About
 A backend for the [Elixir Logger](http://elixir-lang.org/docs/v1.0/logger/Logger.html)
-that will send logs to the [Logstash UDP input](https://www.elastic.co/guide/en/logstash/current/plugins-inputs-udp.html).
+that will send logs to the [Logstash UDP input](https://www.elastic.co/guide/en/logstash/current/plugins-inputs-udp.html) in **flat** JSON format.
 
 ## Supported options
 
