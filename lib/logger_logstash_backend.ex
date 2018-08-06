@@ -46,7 +46,8 @@ defmodule LoggerLogstashBackend do
     {:ok, state}
   end
 
-  def terminate(_reason, _state) do
+  def terminate(_reason, %{socket: socket, handler: handler}) do
+    handler.close(socket)
     :ok
   end
 
@@ -56,11 +57,13 @@ defmodule LoggerLogstashBackend do
       port: port,
       type: type,
       metadata: metadata,
-      socket: socket
+      socket: socket,
+      handler: handler
     }
   ) do
     fields = md
              |> Keyword.merge(metadata)
+             |> Enum.map(fn({key, value}) -> {key, transform_map_to_string(value)} end)
              |> Enum.into(%{})
              |> Map.put(:level, to_string(level))
              |> inspect_pids
@@ -77,7 +80,8 @@ defmodule LoggerLogstashBackend do
     }
     |> Map.merge(fields)
     |> JSX.encode()
-    :gen_udp.send socket, host, port, to_charlist(json)
+
+    handler.send(socket, %{host: host, port: port, payload: json})
   end
 
   defp configure(name, opts) do
@@ -89,11 +93,13 @@ defmodule LoggerLogstashBackend do
     metadata = Keyword.get opts, :metadata, []
     type = Keyword.get opts, :type, "elixir"
     host = Keyword.get opts, :host
-    port = Keyword.get opts, :port
-    {:ok, socket} = :gen_udp.open 0
+    port = Keyword.get opts, :port, 0
+    handler = Keyword.get opts, :handler, LoggerLogstashBackend.UDP
+    {:ok, socket} = handler.connect(host, port)
     %{
       name: name,
-      host: to_charlist(host),
+      handler: handler,
+      host: host,
       port: port,
       level: level,
       socket: socket,
@@ -110,6 +116,16 @@ defmodule LoggerLogstashBackend do
   defp inspect_pids(fields) when is_map(fields) do
     Enum.into fields, %{}, fn {key, value} ->
       {key, inspect_pid(value)}
+    end
+  end
+
+  defp transform_map_to_string(value) do
+    with true <- is_map(value) do
+      {:ok, string_value} = value
+      |> JSX.encode
+      string_value
+    else
+      false -> value
     end
   end
 end

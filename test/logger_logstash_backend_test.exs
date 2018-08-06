@@ -24,6 +24,7 @@ defmodule LoggerLogstashBackendTest do
   setup do
     Logger.configure_backend @backend, [
       host: "127.0.0.1",
+      handler: LoggerLogstashBackend.UDP,
       port: 10001,
       level: :info,
       type: "some_app",
@@ -40,53 +41,46 @@ defmodule LoggerLogstashBackendTest do
 
   test "can log" do
     Logger.info "hello world", [key1: "field1"]
-    json = get_log()
-    {:ok, data} = JSX.decode json
+    {ts, expected, data} = parse_data(43, %{"key1" => "field1"})
+    now = Timex.to_unix Timex.local
     assert data["type"] === "some_app"
     assert data["message"] === "hello world"
-    expected = %{
-      "function" => "test can log/1",
-      "level" => "info",
-      "module" => "Elixir.LoggerLogstashBackendTest",
-      "pid" => (inspect self()),
-      "some_metadata" => "go here",
-      "line" => 42,
-      "key1" => "field1"
-    }
     assert contains?(data, expected)
-    {:ok, ts} = Timex.parse data["@timestamp"], "{ISO:Extended}"
-    ts = Timex.to_unix ts
-
-    now = Timex.to_unix Timex.local
     assert (now - ts) < 1000
   end
 
   test "can log pids" do
     Logger.info "pid", [pid_key: self()]
-    json = get_log()
-    {:ok, data} = JSX.decode json
+    {ts, expected, data} = parse_data(53, %{"pid_key" => inspect(self()),
+                                            "function" => "test can log pids/1"})
+    now = Timex.to_unix Timex.local
     assert data["type"] === "some_app"
     assert data["message"] === "pid"
-    expected = %{
-      "function" => "test can log pids/1",
-      "level" => "info",
-      "module" => "Elixir.LoggerLogstashBackendTest",
-      "pid" => (inspect self()),
-      "pid_key" => inspect(self()),
-      "some_metadata" => "go here",
-      "line" => 65
-    }
     assert contains?(data, expected)
-    {:ok, ts} = Timex.parse data["@timestamp"], "{ISO:Extended}"
-    ts = Timex.to_unix ts
-
-    now = Timex.to_unix Timex.local
     assert (now - ts) < 1000
   end
 
   test "cant log when minor levels" do
     Logger.debug "hello world", [key1: "field1"]
     :nothing_received = get_log()
+  end
+
+  def parse_data(line_nr, extra_fields) do
+    json = get_log()
+    {:ok, data} = JSX.decode json
+    {:ok, ts} = Timex.parse data["@timestamp"], "{ISO:Extended}"
+    ts = Timex.to_unix ts
+    expected = %{
+      "function" => "test can log/1",
+      "level" => "info",
+      "module" => "Elixir.LoggerLogstashBackendTest",
+      "pid" => (inspect self()),
+      "some_metadata" => "go here",
+      "line" => line_nr
+    }
+    |> Map.merge(extra_fields)
+
+    {ts, expected, data}
   end
 
   defp get_log do
