@@ -72,10 +72,19 @@ defmodule LoggerLogstashBackend do
     {:ok, ts} = NaiveDateTime.new(
       year, month, day, hour, minute, second, (milliseconds * 1000)
     )
-    ts = Timex.to_datetime ts, Timezone.local
+
+    timestamp = try do
+      ts
+      |> Timex.to_datetime(Timezone.local)
+      |> Timex.format!("{ISO:Extended}")
+    rescue
+      ArgumentError ->
+        Timex.local
+        |> Timex.format!("{ISO:Extended}")
+    end
     {:ok, json} = %{
       type: type,
-      "@timestamp": Timex.format!(ts, "{ISO:Extended}"),
+      "@timestamp": timestamp,
       message: to_string(msg),
     }
     |> Map.merge(fields)
