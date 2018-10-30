@@ -65,6 +65,32 @@ defmodule LoggerLogstashBackendTest do
     :nothing_received = get_log()
   end
 
+  test "test CEST to CET datetime saving swicht period" do
+    {:ok, data} = log_custom_date({{2018, 10, 28}, {1, 59, 0, 0}})
+    assert data["message"] === "log message"
+    {:ok, data} = log_custom_date({{2018, 10, 28}, {2, 0, 0, 0}})
+    assert data["message"] === "log message"
+    {:ok, data} = log_custom_date({{2018, 10, 28}, {2, 12, 32, 0}})
+    assert data["message"] === "log message"
+    {:ok, data} = log_custom_date({{2018, 10, 28}, {3, 0, 0, 0}})
+    assert data["message"] === "log message"
+    {:ok, data} = log_custom_date({{2018, 10, 28}, {3, 1, 0, 0}})
+    assert data["message"] === "log message"
+  end
+
+  test "test CET to CEST datetime saving switch period" do
+    {:ok, data} = log_custom_date({{2019, 3, 31}, {1, 59, 0, 0}})
+    assert data["message"] === "log message"
+    {:ok, data} = log_custom_date({{2019, 3, 31}, {2, 0, 0, 0}})
+    assert data["message"] === "log message"
+    {:ok, data} = log_custom_date({{2019, 3, 31}, {2, 12, 32, 0}})
+    assert data["message"] === "log message"
+    {:ok, data} = log_custom_date({{2019, 3, 31}, {3, 0, 0, 0}})
+    assert data["message"] === "log message"
+    {:ok, data} = log_custom_date({{2019, 3, 31}, {3, 1, 0, 0}})
+    assert data["message"] === "log message"
+  end
+
   def parse_data(line_nr, extra_fields) do
     json = get_log()
     {:ok, data} = JSX.decode json
@@ -94,5 +120,13 @@ defmodule LoggerLogstashBackendTest do
     Enum.all?(Map.to_list(map2), fn {key, value} ->
       Map.fetch!(map1, key) == value
     end)
+  end
+
+  defp log_custom_date(date_tuple) do
+    [{_backend, _type, state} | _tail] = :sys.get_state(Logger)
+    LoggerLogstashBackend.handle_event(
+      {:error, node(), {Logger, "log message", date_tuple, []}}, state)
+    json = get_log()
+    JSX.decode json
   end
 end
