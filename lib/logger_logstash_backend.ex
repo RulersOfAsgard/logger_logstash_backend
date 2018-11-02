@@ -82,6 +82,7 @@ defmodule LoggerLogstashBackend do
         Timex.local
         |> Timex.format!("{ISO:Extended}")
     end
+
     {:ok, json} = %{
       type: type,
       "@timestamp": timestamp,
@@ -89,7 +90,7 @@ defmodule LoggerLogstashBackend do
     }
     |> Map.merge(fields)
     |> JSX.encode()
-
+    if msg === "crash", do: raise(ArgumentError)
     handler.send(socket, %{host: host, port: port, payload: json})
   end
 
