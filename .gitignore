@@ -1,5 +1,6 @@
 /doc
 /_build
+/.elixir_ls
 /cover
 /deps
 erl_crash.dump
