@@ -34,11 +34,13 @@ defmodule LoggerLogstashBackend do
   end
 
   def handle_event(
-    {level, _gl, {Logger, msg, ts, md}}, %{level: min_level} = state
-  ) do
+        {level, _gl, {Logger, msg, ts, md}},
+        %{level: min_level} = state
+      ) do
     if is_nil(min_level) or Logger.compare_levels(level, min_level) != :lt do
-      log_event level, msg, ts, md, state
+      log_event(level, msg, ts, md, state)
     end
+
     {:ok, state}
   end
 
@@ -52,59 +54,76 @@ defmodule LoggerLogstashBackend do
   end
 
   defp log_event(
-    level, msg, ts, md, %{
-      host: host,
-      port: port,
-      type: type,
-      metadata: metadata,
-      socket: socket,
-      handler: handler
-    }
-  ) do
-    fields = md
-             |> Keyword.merge(metadata)
-             |> Enum.map(fn({key, value}) -> {key, transform_map_to_string(value)} end)
-             |> Enum.into(%{})
-             |> Map.put(:level, to_string(level))
-             |> inspect_pids
+         level,
+         msg,
+         ts,
+         md,
+         %{
+           host: host,
+           port: port,
+           type: type,
+           metadata: metadata,
+           socket: socket,
+           handler: handler
+         }
+       ) do
+    fields =
+      md
+      |> Keyword.merge(metadata)
+      |> Enum.map(fn {key, value} -> {key, normalize(value)} end)
+      |> Enum.into(%{})
+      |> Map.put(:level, to_string(level))
+      |> inspect_pids
 
     {{year, month, day}, {hour, minute, second, milliseconds}} = ts
-    {:ok, ts} = NaiveDateTime.new(
-      year, month, day, hour, minute, second, (milliseconds * 1000)
-    )
 
-    timestamp = try do
-      ts
-      |> Timex.to_datetime(Timezone.local)
-      |> Timex.format!("{ISO:Extended}")
-    rescue
-      ArgumentError ->
-        Timex.local
+    {:ok, ts} =
+      NaiveDateTime.new(
+        year,
+        month,
+        day,
+        hour,
+        minute,
+        second,
+        milliseconds * 1000
+      )
+
+    timestamp =
+      try do
+        ts
+        |> Timex.to_datetime(Timezone.local())
         |> Timex.format!("{ISO:Extended}")
-    end
-    {:ok, json} = %{
-      type: type,
-      "@timestamp": timestamp,
-      message: to_string(msg),
-    }
-    |> Map.merge(fields)
-    |> JSX.encode()
+      rescue
+        ArgumentError ->
+          Timex.local()
+          |> Timex.format!("{ISO:Extended}")
+      end
+
+    {:ok, json} =
+      %{
+        type: type,
+        "@timestamp": timestamp,
+        message: to_string(msg)
+      }
+      |> Map.merge(fields)
+      |> JSX.encode()
 
     handler.send(socket, %{host: host, port: port, payload: json})
   end
 
   defp configure(name, opts) do
-    env = Application.get_env :logger, name, []
-    opts = Keyword.merge env, opts
-    Application.put_env :logger, name, opts
+    env = Application.get_env(:logger, name, [])
+    opts = Keyword.merge(env, opts)
+    Application.put_env(:logger, name, opts)
 
-    level = Keyword.get opts, :level, :debug
-    metadata = Keyword.get opts, :metadata, []
-    type = Keyword.get opts, :type, "elixir"
-    host = Keyword.get opts, :host
-    port = Keyword.get opts, :port, 0
-    handler = Keyword.get opts, :handler, LoggerLogstashBackend.UDP
+    level = Keyword.get(opts, :level, :debug)
+    metadata = Keyword.get(opts, :metadata, [])
+    type = Keyword.get(opts, :type, "elixir")
+    host = Keyword.get(opts, :host)
+    port = Keyword.get(opts, :port, 0)
+    handler = Keyword.get(opts, :handler, LoggerLogstashBackend.UDP)
     {:ok, socket} = handler.connect(host, port)
+
     %{
       name: name,
       handler: handler,
@@ -123,18 +142,29 @@ defmodule LoggerLogstashBackend do
 
   # inspects the field values only if they are pids
   defp inspect_pids(fields) when is_map(fields) do
-    Enum.into fields, %{}, fn {key, value} ->
+    Enum.into(fields, %{}, fn {key, value} ->
       {key, inspect_pid(value)}
+    end)
+  end
+
+  def normalize(value) do
+    with :not_map <- transform_map_to_string(value),
+         :not_tuple <- transform_tuple_to_string(value) do
+      value
     end
   end
 
   defp transform_map_to_string(value) do
-    with true <- is_map(value) do
-      {:ok, string_value} = value
-      |> JSX.encode
-      string_value
-    else
-      false -> value
+    case is_map(value) do
+      true -> inspect(value)
+      false -> :not_map
+    end
+  end
+
+  defp transform_tuple_to_string(value) do
+    case is_tuple(value) do
+      true -> inspect(value)
+      false -> :not_tuple
     end
   end
 end
