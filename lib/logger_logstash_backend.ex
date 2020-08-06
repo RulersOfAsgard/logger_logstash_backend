@@ -99,16 +99,16 @@ defmodule LoggerLogstashBackend do
           |> Timex.format!("{ISO:Extended}")
       end
 
-    {:ok, json} =
+    encoded_message =
       %{
         type: type,
         "@timestamp": timestamp,
         message: to_string(msg)
       }
       |> Map.merge(fields)
-      |> JSX.encode()
+      |> encode()
 
-    handler.send(socket, %{host: host, port: port, payload: json})
+    handler.send(socket, %{host: host, port: port, payload: encoded_message})
   end
 
   defp configure(name, opts) do
@@ -136,6 +136,13 @@ defmodule LoggerLogstashBackend do
     }
   end
 
+  defp encode(map) do
+    case JSX.encode(map) do
+      {:ok, message} -> message
+      {:error, _} = error -> inspect(error)
+    end
+  end
+
   # inspects the argument only if it is a pid
   defp inspect_pid(pid) when is_pid(pid), do: inspect(pid)
   defp inspect_pid(other), do: other
@@ -149,8 +156,16 @@ defmodule LoggerLogstashBackend do
 
   def normalize(value) do
     with :not_map <- transform_map_to_string(value),
-         :not_tuple <- transform_tuple_to_string(value) do
+         :not_tuple <- transform_tuple_to_string(value),
+         :not_function <- transform_function_to_string(value) do
       value
+    end
+  end
+
+  defp transform_function_to_string(value) do
+    case is_function(value) do
+      true -> inspect(value)
+      false -> :not_function
     end
   end
 
